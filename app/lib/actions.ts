@@ -7,21 +7,47 @@ import { redirect } from 'next/navigation';
 
 const FormSchema = z.object({
   id: z.string(),
-  customerId: z.string(),
-  amount: z.coerce.number(),
-  status: z.enum(['pending', 'paid']),
+  customerId: z.string({
+    invalid_type_error: 'Please select a customer.',
+  }),
+  amount: z.coerce
+    .number()
+    .gt(0, { message: 'Please enter an amount greater than $0.' }),
+  status: z.enum(['pending', 'paid'], {
+    invalid_type_error: 'Please select an invoice status.',
+  }),
   date: z.string(),
 });
 
 const CreateInvoice = FormSchema.omit({ id: true, date: true });
 
-export async function createInvoice(formData: FormData) {
+export type State = {
+  errors?: {
+    customerId?: string[];
+    amount?: string[];
+    status?: string[];
+  };
+  message?: string | null;
+};
+
+export async function createInvoice(prevState: State, formData: FormData) {
   // this is a server function
-  const { customerId, amount, status } = CreateInvoice.parse({
+  const validationFields = CreateInvoice.safeParse({
     customerId: formData.get('customerId'),
     amount: formData.get('amount'),
     status: formData.get('status'),
   });
+
+  // if validation failed, display an error message.
+  if (!validationFields.success) {
+    return {
+      errors: validationFields.error.flatten().fieldErrors,
+      message: 'Missing Fields. Failed to Create Invoice.',
+    };
+  }
+
+  // prepare the data to be inserted into the database
+  const { customerId, amount, status } = validationFields.data;
   const amountInCents = amount * 100; // good practice to store your monetary values in cents rather than float numbers to reduce js errors or inaccuracy
   const date = new Date().toISOString().split('T')[0]; // removes the ISO time
 
@@ -34,6 +60,7 @@ export async function createInvoice(formData: FormData) {
     };
   }
 
+  // revalidate cache for invoices page and redirect
   revalidatePath('/dashboard/invoices');
   redirect('/dashboard/invoices');
 }
