@@ -70,13 +70,29 @@ const UpdateInvoice = FormSchema.omit({ id: true, date: true });
 
 // ...
 
-export async function updateInvoice(id: string, formData: FormData) {
-  const { customerId, amount, status } = UpdateInvoice.parse({
+export async function updateInvoice(
+  id: string,
+  prevState: State,
+  formData: FormData,
+) {
+  // validate the fields
+
+  const validationFields = UpdateInvoice.safeParse({
     customerId: formData.get('customerId'),
     amount: formData.get('amount'),
     status: formData.get('status'),
   });
 
+  // if validation failed, display an error message.
+  if (!validationFields.success) {
+    return {
+      errors: validationFields.error.flatten().fieldErrors,
+      message: 'Missing Fields. Failed to Update Invoice.',
+    };
+  }
+
+  // prepare the data to be inserted into the database
+  const { customerId, amount, status } = validationFields.data;
   const amountInCents = amount * 100;
 
   try {
